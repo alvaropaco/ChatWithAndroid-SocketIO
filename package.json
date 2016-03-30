@@ -1,0 +1,31 @@
+{
+  "name": "androidsocketiocom.br",
+  "version": "1.0.0",
+  "description": "Android Socket.IO Chat implementation",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ScalaSoft/ChatWithAndroid-SocketIO.git"
+  },
+  "keywords": [
+    "Android",
+    "Socket.io",
+    "Socket",
+    "Chat",
+    "Android",
+    "Chat"
+  ],
+  "author": "Alvaro Paco",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ScalaSoft/ChatWithAndroid-SocketIO/issues"
+  },
+  "homepage": "https://github.com/ScalaSoft/ChatWithAndroid-SocketIO#readme",
+  "dependencies": {
+    "express": "^4.13.4",
+    "socket.io": "^1.4.5"
+  }
+}
