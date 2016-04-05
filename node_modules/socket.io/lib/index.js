@@ -5,6 +5,7 @@
 
 var http = require('http');
 var read = require('fs').readFileSync;
+var parse = require('url').parse;
 var engine = require('engine.io');
 var client = require('socket.io-client');
 var clientVersion = require('socket.io-client/package').version;
@@ -29,8 +30,8 @@ var clientSource = read(require.resolve('socket.io-client/socket.io.js'), 'utf-8
 /**
  * Server constructor.
  *
- * @param {http.Server|Number|Object} srv http server, port or options
- * @param {Object} opts
+ * @param {http.Server|Number|Object} http server, port or options
+ * @param {Object} options
  * @api public
  */
 
@@ -53,8 +54,8 @@ function Server(srv, opts){
 /**
  * Server request verification function, that checks for allowed origins
  *
- * @param {http.IncomingMessage} req request
- * @param {Function} fn callback to be called with the result: `fn(err, success)`
+ * @param {http.IncomingMessage} request
+ * @param {Function} callback to be called with the result: `fn(err, success)`
  */
 
 Server.prototype.checkRequest = function(req, fn) {
@@ -68,10 +69,7 @@ Server.prototype.checkRequest = function(req, fn) {
   if (origin) {
     try {
       var parts = url.parse(origin);
-      var defaultPort = 'https:' == parts.protocol ? 443 : 80;
-      parts.port = parts.port != null
-        ? parts.port
-        : defaultPort;
+      parts.port = parts.port || 80;
       var ok =
         ~this._origins.indexOf(parts.hostname + ':' + parts.port) ||
         ~this._origins.indexOf(parts.hostname + ':*') ||
@@ -86,7 +84,7 @@ Server.prototype.checkRequest = function(req, fn) {
 /**
  * Sets/gets whether client code is being served.
  *
- * @param {Boolean} v whether to serve client code
+ * @param {Boolean} whether to serve client code
  * @return {Server|Boolean} self when setting or value when getting
  * @api public
  */
@@ -139,7 +137,7 @@ Server.prototype.set = function(key, val){
 /**
  * Sets the client serving path.
  *
- * @param {String} v pathname
+ * @param {String} pathname
  * @return {Server|String} self when setting or value when getting
  * @api public
  */
@@ -153,7 +151,7 @@ Server.prototype.path = function(v){
 /**
  * Sets the adapter for rooms.
  *
- * @param {Adapter} v pathname
+ * @param {Adapter} pathname
  * @return {Server|Adapter} self when setting or value when getting
  * @api public
  */
@@ -172,7 +170,7 @@ Server.prototype.adapter = function(v){
 /**
  * Sets the allowed origins for requests.
  *
- * @param {String} v origins
+ * @param {String} origins
  * @return {Server|Adapter} self when setting or value when getting
  * @api public
  */
@@ -221,7 +219,7 @@ Server.prototype.attach = function(srv, opts){
   opts = opts || {};
   opts.path = opts.path || this.path();
   // set origins verification
-  opts.allowRequest = opts.allowRequest || this.checkRequest.bind(this);
+  opts.allowRequest = this.checkRequest.bind(this);
 
   // initialize engine
   debug('creating engine.io instance with opts %j', opts);
@@ -242,7 +240,7 @@ Server.prototype.attach = function(srv, opts){
 /**
  * Attaches the static file serving.
  *
- * @param {Function|http.Server} srv http server
+ * @param {Function|http.Server} http server
  * @api private
  */
 
@@ -253,7 +251,7 @@ Server.prototype.attachServe = function(srv){
   var self = this;
   srv.removeAllListeners('request');
   srv.on('request', function(req, res) {
-    if (0 === req.url.indexOf(url)) {
+    if (0 == req.url.indexOf(url)) {
       self.serve(req, res);
     } else {
       for (var i = 0; i < evs.length; i++) {
@@ -292,7 +290,7 @@ Server.prototype.serve = function(req, res){
 /**
  * Binds socket.io to an engine.io instance.
  *
- * @param {engine.Server} engine engine.io (or compatible) server
+ * @param {engine.Server} engine.io (or compatible) server
  * @return {Server} self
  * @api public
  */
@@ -306,7 +304,7 @@ Server.prototype.bind = function(engine){
 /**
  * Called with each incoming transport connection.
  *
- * @param {engine.Socket} conn
+ * @param {engine.Socket} socket
  * @return {Server} self
  * @api public
  */
@@ -321,22 +319,21 @@ Server.prototype.onconnection = function(conn){
 /**
  * Looks up a namespace.
  *
- * @param {String} name nsp name
- * @param {Function} fn optional, nsp `connection` ev handler
+ * @param {String} nsp name
+ * @param {Function} optional, nsp `connection` ev handler
  * @api public
  */
 
 Server.prototype.of = function(name, fn){
   if (String(name)[0] !== '/') name = '/' + name;
   
-  var nsp = this.nsps[name];
-  if (!nsp) {
+  if (!this.nsps[name]) {
     debug('initializing namespace %s', name);
-    nsp = new Namespace(this, name);
+    var nsp = new Namespace(this, name);
     this.nsps[name] = nsp;
   }
-  if (fn) nsp.on('connect', fn);
-  return nsp;
+  if (fn) this.nsps[name].on('connect', fn);
+  return this.nsps[name];
 };
 
 /**
@@ -346,11 +343,9 @@ Server.prototype.of = function(name, fn){
  */
 
 Server.prototype.close = function(){
-  for (var id in this.nsps['/'].sockets) {
-    if (this.nsps['/'].sockets.hasOwnProperty(id)) {
-      this.nsps['/'].sockets[id].onclose();
-    }
-  }
+  this.nsps['/'].sockets.forEach(function(socket){
+    socket.onclose();
+  });
 
   this.engine.close();
 
@@ -363,7 +358,7 @@ Server.prototype.close = function(){
  * Expose main namespace (/).
  */
 
-['on', 'to', 'in', 'use', 'emit', 'send', 'write', 'clients', 'compress'].forEach(function(fn){
+['on', 'to', 'in', 'use', 'emit', 'send', 'write'].forEach(function(fn){
   Server.prototype[fn] = function(){
     var nsp = this.sockets[fn];
     return nsp.apply(this.sockets, arguments);
@@ -371,9 +366,8 @@ Server.prototype.close = function(){
 });
 
 Namespace.flags.forEach(function(flag){
-  Server.prototype.__defineGetter__(flag, function(){
-    this.sockets.flags = this.sockets.flags || {};
-    this.sockets.flags[flag] = true;
+  Server.prototype.__defineGetter__(flag, function(name){
+    this.flags.push(name);
     return this;
   });
 });

@@ -16,7 +16,7 @@ module.exports = Client;
  * Client constructor.
  *
  * @param {Server} server instance
- * @param {Socket} conn
+ * @param {Socket} connection
  * @api private
  */
 
@@ -28,7 +28,7 @@ function Client(server, conn){
   this.id = conn.id;
   this.request = conn.request;
   this.setup();
-  this.sockets = {};
+  this.sockets = [];
   this.nsps = {};
   this.connectBuffer = [];
 }
@@ -54,18 +54,17 @@ Client.prototype.setup = function(){
 /**
  * Connects a client to a namespace.
  *
- * @param {String} name namespace
+ * @param {String} namespace name
  * @api private
  */
 
 Client.prototype.connect = function(name){
   debug('connecting to namespace %s', name);
-  var nsp = this.server.nsps[name];
-  if (!nsp) {
+  if (!this.server.nsps[name]) {
     this.packet({ type: parser.ERROR, nsp: name, data : 'Invalid namespace'});
     return;
   }
-
+  var nsp = this.server.of(name);
   if ('/' != name && !this.nsps['/']) {
     this.connectBuffer.push(name);
     return;
@@ -73,7 +72,7 @@ Client.prototype.connect = function(name){
 
   var self = this;
   var socket = nsp.add(this, function(){
-    self.sockets[socket.id] = socket;
+    self.sockets.push(socket);
     self.nsps[nsp.name] = socket;
 
     if ('/' == nsp.name && self.connectBuffer.length > 0) {
@@ -90,12 +89,12 @@ Client.prototype.connect = function(name){
  */
 
 Client.prototype.disconnect = function(){
-  for (var id in this.sockets) {
-    if (this.sockets.hasOwnProperty(id)) {
-      this.sockets[id].disconnect();
-    }
+  var socket;
+  // we don't use a for loop because the length of
+  // `sockets` changes upon each iteration
+  while (socket = this.sockets.shift()) {
+    socket.disconnect();
   }
-  this.sockets = {};
   this.close();
 };
 
@@ -106,9 +105,10 @@ Client.prototype.disconnect = function(){
  */
 
 Client.prototype.remove = function(socket){
-  if (this.sockets.hasOwnProperty(socket.id)) {
-    var nsp = this.sockets[socket.id].nsp.name;
-    delete this.sockets[socket.id];
+  var i = this.sockets.indexOf(socket);
+  if (~i) {
+    var nsp = this.sockets[i].nsp.name;
+    this.sockets.splice(i, 1);
     delete this.nsps[nsp];
   } else {
     debug('ignoring remove for %s', socket.id);
@@ -133,25 +133,25 @@ Client.prototype.close = function(){
  * Writes a packet to the transport.
  *
  * @param {Object} packet object
- * @param {Object} opts
+ * @param {Boolean} whether packet is already encoded
+ * @param {Boolean} whether packet is volatile
  * @api private
  */
 
-Client.prototype.packet = function(packet, opts){
-  opts = opts || {};
+Client.prototype.packet = function(packet, preEncoded, volatile){
   var self = this;
 
   // this writes to the actual connection
   function writeToEngine(encodedPackets) {
-    if (opts.volatile && !self.conn.transport.writable) return;
+    if (volatile && !self.conn.transport.writable) return;
     for (var i = 0; i < encodedPackets.length; i++) {
-      self.conn.write(encodedPackets[i], { compress: opts.compress });
+      self.conn.write(encodedPackets[i]);
     }
   }
 
   if ('open' == this.conn.readyState) {
     debug('writing packet %j', packet);
-    if (!opts.preEncoded) { // not broadcasting, need to encode
+    if(!preEncoded) { // not broadcasting, need to encode
       this.encoder.encode(packet, function (encodedPackets) { // encode, then write results to engine
         writeToEngine(encodedPackets);
       });
@@ -200,16 +200,14 @@ Client.prototype.ondecoded = function(packet) {
 /**
  * Handles an error.
  *
- * @param {Object} err object
+ * @param {Objcet} error object
  * @api private
  */
 
 Client.prototype.onerror = function(err){
-  for (var id in this.sockets) {
-    if (this.sockets.hasOwnProperty(id)) {
-      this.sockets[id].onerror(err);
-    }
-  }
+  this.sockets.forEach(function(socket){
+    socket.onerror(err);
+  });
   this.onclose('client error');
 };
 
@@ -227,12 +225,10 @@ Client.prototype.onclose = function(reason){
   this.destroy();
 
   // `nsps` and `sockets` are cleaned up seamlessly
-  for (var id in this.sockets) {
-    if (this.sockets.hasOwnProperty(id)) {
-      this.sockets[id].onclose(reason);
-    }
+  var socket;
+  while (socket = this.sockets.shift()) {
+    socket.onclose(reason);
   }
-  this.sockets = {};
 
   this.decoder.destroy(); // clean up decoder
 };

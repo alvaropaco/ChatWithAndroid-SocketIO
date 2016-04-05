@@ -7,7 +7,7 @@ var Socket = require('./socket');
 var Emitter = require('events').EventEmitter;
 var parser = require('socket.io-parser');
 var debug = require('debug')('socket.io:namespace');
-var hasBin = require('has-binary');
+var hasBin = require('has-binary-data');
 
 /**
  * Module exports.
@@ -29,10 +29,7 @@ exports.events = [
  * Flags.
  */
 
-exports.flags = [
-  'json',
-  'volatile'
-];
+exports.flags = ['json'];
 
 /**
  * `EventEmitter#emit` reference.
@@ -51,10 +48,11 @@ var emit = Emitter.prototype.emit;
 function Namespace(server, name){
   this.name = name;
   this.server = server;
-  this.sockets = {};
+  this.sockets = [];
   this.connected = {};
   this.fns = [];
   this.ids = 0;
+  this.acks = {};
   this.initAdapter();
 }
 
@@ -104,7 +102,7 @@ Namespace.prototype.use = function(fn){
  * Executes the middleware for an incoming client.
  *
  * @param {Socket} socket that will get added
- * @param {Function} fn last fn call in the middleware
+ * @param {Function} last fn call in the middleware
  * @api private
  */
 
@@ -160,7 +158,7 @@ Namespace.prototype.add = function(client, fn){
         if (err) return socket.error(err.data || err.message);
 
         // track socket
-        self.sockets[socket.id] = socket;
+        self.sockets.push(socket);
 
         // it's paramount that the internal `onconnect` logic
         // fires before user-set events to prevent state order
@@ -187,8 +185,9 @@ Namespace.prototype.add = function(client, fn){
  */
 
 Namespace.prototype.remove = function(socket){
-  if (this.sockets.hasOwnProperty(socket.id)) {
-    delete this.sockets[socket.id];
+  var i = this.sockets.indexOf(socket);
+  if (~i) {
+    this.sockets.splice(i, 1);
   } else {
     debug('ignoring remove for %s', socket.id);
   }
@@ -239,34 +238,5 @@ Namespace.prototype.write = function(){
   var args = Array.prototype.slice.call(arguments);
   args.unshift('message');
   this.emit.apply(this, args);
-  return this;
-};
-
-/**
- * Gets a list of clients.
- *
- * @return {Namespace} self
- * @api public
- */
-
-Namespace.prototype.clients = function(fn){
-  this.adapter.clients(this.rooms, fn);
-  // delete rooms flag for scenario:
-  // .in('room').clients() (GH-1978)
-  delete this.rooms;
-  return this;
-};
-
-/**
- * Sets the compress flag.
- *
- * @param {Boolean} compress if `true`, compresses the sending data
- * @return {Socket} self
- * @api public
- */
-
-Namespace.prototype.compress = function(compress){
-  this.flags = this.flags || {};
-  this.flags.compress = compress;
   return this;
 };

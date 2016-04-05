@@ -7,7 +7,7 @@ var Emitter = require('events').EventEmitter;
 var parser = require('socket.io-parser');
 var url = require('url');
 var debug = require('debug')('socket.io:socket');
-var hasBin = require('has-binary');
+var hasBin = require('has-binary-data');
 
 /**
  * Module exports.
@@ -59,10 +59,11 @@ function Socket(nsp, client){
   this.nsp = nsp;
   this.server = nsp.server;
   this.adapter = this.nsp.adapter;
-  this.id = nsp.name + '#' + client.id;
+  this.id = client.id;
+  this.request = client.request;
   this.client = client;
   this.conn = client.conn;
-  this.rooms = {};
+  this.rooms = [];
   this.acks = {};
   this.connected = true;
   this.disconnected = false;
@@ -88,7 +89,7 @@ flags.forEach(function(flag){
 });
 
 /**
- * `request` engine.io shortcut.
+ * `request` engine.io shorcut.
  *
  * @api public
  */
@@ -131,11 +132,10 @@ Socket.prototype.emit = function(ev){
     var packet = {};
     packet.type = hasBin(args) ? parser.BINARY_EVENT : parser.EVENT;
     packet.data = args;
-    var flags = this.flags || {};
 
     // access last argument to see if it's an ACK callback
     if ('function' == typeof args[args.length - 1]) {
-      if (this._rooms || flags.broadcast) {
+      if (this._rooms || (this.flags && this.flags.broadcast)) {
         throw new Error('Callbacks are not supported when broadcasting');
       }
 
@@ -144,18 +144,15 @@ Socket.prototype.emit = function(ev){
       packet.id = this.nsp.ids++;
     }
 
-    if (this._rooms || flags.broadcast) {
+    if (this._rooms || (this.flags && this.flags.broadcast)) {
       this.adapter.broadcast(packet, {
         except: [this.id],
         rooms: this._rooms,
-        flags: flags
+        flags: this.flags
       });
     } else {
       // dispatch packet
-      this.packet(packet, {
-        volatile: flags.volatile,
-        compress: flags.compress
-      });
+      this.packet(packet);
     }
 
     // reset flags
@@ -199,22 +196,20 @@ Socket.prototype.write = function(){
  * Writes a packet.
  *
  * @param {Object} packet object
- * @param {Object} opts options
  * @api private
  */
 
-Socket.prototype.packet = function(packet, opts){
+Socket.prototype.packet = function(packet, preEncoded){
   packet.nsp = this.nsp.name;
-  opts = opts || {};
-  opts.compress = false !== opts.compress;
-  this.client.packet(packet, opts);
+  var volatile = this.flags && this.flags.volatile;
+  this.client.packet(packet, preEncoded, volatile);
 };
 
 /**
  * Joins a room.
  *
  * @param {String} room
- * @param {Function} fn optional, callback
+ * @param {Function} optional, callback
  * @return {Socket} self
  * @api private
  */
@@ -222,14 +217,11 @@ Socket.prototype.packet = function(packet, opts){
 Socket.prototype.join = function(room, fn){
   debug('joining room %s', room);
   var self = this;
-  if (this.rooms.hasOwnProperty(room)) {
-    fn && fn(null);
-    return this;
-  }
+  if (~this.rooms.indexOf(room)) return this;
   this.adapter.add(this.id, room, function(err){
     if (err) return fn && fn(err);
     debug('joined room %s', room);
-    self.rooms[room] = room;
+    self.rooms.push(room);
     fn && fn(null);
   });
   return this;
@@ -239,7 +231,7 @@ Socket.prototype.join = function(room, fn){
  * Leaves a room.
  *
  * @param {String} room
- * @param {Function} fn optional, callback
+ * @param {Function} optional, callback
  * @return {Socket} self
  * @api private
  */
@@ -250,7 +242,10 @@ Socket.prototype.leave = function(room, fn){
   this.adapter.del(this.id, room, function(err){
     if (err) return fn && fn(err);
     debug('left room %s', room);
-    delete self.rooms[room];
+    var idx = self.rooms.indexOf(room);
+    if (idx >= 0) {
+      self.rooms.splice(idx, 1);
+    }
     fn && fn(null);
   });
   return this;
@@ -264,7 +259,7 @@ Socket.prototype.leave = function(room, fn){
 
 Socket.prototype.leaveAll = function(){
   this.adapter.delAll(this.id);
-  this.rooms = {};
+  this.rooms = [];
 };
 
 /**
@@ -276,9 +271,9 @@ Socket.prototype.leaveAll = function(){
 
 Socket.prototype.onconnect = function(){
   debug('socket connected - writing packet');
-  this.nsp.connected[this.id] = this;
   this.join(this.id);
   this.packet({ type: parser.CONNECT });
+  this.nsp.connected[this.id] = this;
 };
 
 /**
@@ -338,7 +333,7 @@ Socket.prototype.onevent = function(packet){
 /**
  * Produces an ack callback to emit with an event.
  *
- * @param {Number} id packet id
+ * @param {Number} packet id
  * @api private
  */
 
@@ -357,8 +352,6 @@ Socket.prototype.ack = function(id){
       type: type,
       data: args
     });
-
-    sent = true;
   };
 };
 
@@ -409,7 +402,7 @@ Socket.prototype.onerror = function(err){
  * Called upon closing. Called by `Client`.
  *
  * @param {String} reason
- * @throw {Error} optional error object
+ * @param {Error} optional error object
  * @api private
  */
 
@@ -428,7 +421,7 @@ Socket.prototype.onclose = function(reason){
 /**
  * Produces an `error` packet.
  *
- * @param {Object} err error object
+ * @param {Object} error object
  * @api private
  */
 
@@ -439,7 +432,7 @@ Socket.prototype.error = function(err){
 /**
  * Disconnects this client.
  *
- * @param {Boolean} close if `true`, closes the underlying connection
+ * @param {Boolean} if `true`, closes the underlying connection
  * @return {Socket} self
  * @api public
  */
@@ -452,19 +445,5 @@ Socket.prototype.disconnect = function(close){
     this.packet({ type: parser.DISCONNECT });
     this.onclose('server namespace disconnect');
   }
-  return this;
-};
-
-/**
- * Sets the compress flag.
- *
- * @param {Boolean} compress if `true`, compresses the sending data
- * @return {Socket} self
- * @api public
- */
-
-Socket.prototype.compress = function(compress){
-  this.flags = this.flags || {};
-  this.flags.compress = compress;
   return this;
 };
