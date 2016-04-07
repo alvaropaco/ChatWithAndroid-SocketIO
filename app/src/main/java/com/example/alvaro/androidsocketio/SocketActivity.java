@@ -39,6 +39,11 @@ public class SocketActivity extends AppCompatActivity {
 
         if (extras != null) {
             this.mUsername = extras.get("userName").toString();
+            ChatFragment fragment = (ChatFragment) getFragmentManager().findFragmentById(R.id.chat);
+            User u = new User();
+            u.setuName(this.mUsername);
+            u.setuNickName(this.mUsername);
+            fragment.setUser(u);
         }
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);

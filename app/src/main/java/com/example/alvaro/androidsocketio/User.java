@@ -6,6 +6,14 @@ import android.graphics.Bitmap;
  * Created by sreejeshpillai on 10/05/15.
  */
 public class User {
+    public String getuId() {
+        return uId;
+    }
+
+    public void setuId(String uId) {
+        this.uId = uId;
+    }
+
     private String uId;
 
     public void setuName(String uName) {
@@ -43,7 +51,7 @@ public class User {
     };
 
     public String getNickName() {
-        return "@" + uNickName;
+        return uNickName;
     };
 
     public Bitmap getImage() {

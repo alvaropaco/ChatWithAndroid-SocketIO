@@ -19,6 +19,5 @@
         android:id="@+id/chat"
         class="com.example.alvaro.androidsocketio.ChatFragment"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@+id/toolbar"/>
+        android:layout_height="match_parent"/>
 </LinearLayout>

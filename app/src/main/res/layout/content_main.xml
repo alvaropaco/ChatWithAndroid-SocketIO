@@ -9,22 +9,39 @@
     tools:showIn="@layout/activity_main"
     android:orientation="vertical">
 
-    <TextView
+    <android.support.v7.widget.RecyclerView
+        android:id="@+id/contacts"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:paddingLeft="@dimen/activity_horizontal_margin"
+        android:paddingRight="@dimen/activity_horizontal_margin"
+        android:scrollbars="vertical"
+        android:scrollbarStyle="outsideOverlay"/>
+    <!--<TextView
+    <fragment
+        android:id="@+id/contact_item"
+        class="com.example.alvaro.androidsocketio.ListItemFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+        android:id="@+id/hellow"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Hello World!" />
     <EditText
         android:id="@+id/userName"
-        android:layout_width="wrap_content"
-        android:layout_height="20dp"
-        android:layout_weight="1"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/user_name_label"
         android:inputType="text"
         android:maxLines="1"
-        android:singleLine="true"/>
+        android:singleLine="true"
+        android:layout_below="@+id/hellow"/>
     <Button
         android:id="@+id/chatBtn"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:onClick="startChat"
-        android:text="@string/chat_btn" />
+        android:layout_below="@+id/userName"
+        android:text="@string/chat_btn" />-->
 </LinearLayout>

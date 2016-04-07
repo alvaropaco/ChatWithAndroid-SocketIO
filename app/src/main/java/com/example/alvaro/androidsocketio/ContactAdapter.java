@@ -1,6 +1,5 @@
 package com.example.alvaro.androidsocketio;
 
-import android.content.Context;
 import android.graphics.Bitmap;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
@@ -12,79 +11,56 @@ import android.widget.TextView;
 import java.util.List;
 
 
-public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHolder> {
+public class ContactAdapter extends RecyclerView.Adapter<ContactAdapter.ViewHolder> {
 
-    private List<Message> mMessages;
+    private List<User> mContacts;
     private int[] mUsernameColors;
 
-    public MessageAdapter(List<Message> messages) {
-        mMessages = messages;
+    public ContactAdapter(List<User> contacts) {
         //  mUsernameColors = context.getResources().getIntArray(R.array.username_colors);
     }
 
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
         int layout = -1;
-        switch (viewType) {
-            case Message.TYPE_MESSAGE:
-                layout = R.layout.layout_message;
-                break;
-            case Message.TYPE_IMAGE:
-                layout = R.layout.layout_image;
-                break;
-        }
+        layout = R.layout.layout_contact;
+
         View v = LayoutInflater
                 .from(parent.getContext())
                 .inflate(layout, parent, false);
+
         return new ViewHolder(v);
     }
 
     @Override
     public void onBindViewHolder(ViewHolder viewHolder, int position) {
-        Message message = mMessages.get(position);
+        User contact = mContacts.get(position);
 
-        User uAuthor = (User) message.getAuthor();
+        if(contact.getName() != null) viewHolder.setName(contact.getName());
+        if(contact.getImage() != null) viewHolder.setImage(contact.getImage());
 
-        viewHolder.setAuthor(uAuthor.getNickName());
-
-        if(message.getType() == 0){
-            viewHolder.setMessage(message.getMessage());
-        }
-        if(message.getType() == 1) {
-            viewHolder.setImage(message.getImage());
-        }
     }
 
     @Override
     public int getItemCount() {
-        return mMessages.size();
-    }
-
-    @Override
-    public int getItemViewType(int position) {
-        return mMessages.get(position).getType();
+        if(mContacts != null) { return mContacts.size(); } else { return  0;}
     }
 
     public class ViewHolder extends RecyclerView.ViewHolder {
         private ImageView mImageView;
-        private TextView mMessageView;
+        private TextView mNameView;
+        private TextView mNickNameView;
         public TextView mAuthor;
 
         public ViewHolder(View itemView) {
             super(itemView);
-            mImageView = (ImageView) itemView.findViewById(R.id.image);
-            mMessageView = (TextView) itemView.findViewById(R.id.message);
-            mAuthor = (TextView) itemView.findViewById(R.id.userFrom);
+            mImageView = (ImageView) itemView.findViewById(R.id.contact_image);
+            mNameView = (TextView) itemView.findViewById(R.id.contact_name);
         }
 
-        public void setAuthor(String author) {
-            if (null == mMessageView) return;
-            mAuthor.setText("@" + author + ": ");
-        }
-
-        public void setMessage(String message) {
-            if (null == mMessageView) return;
-            mMessageView.setText(message);
+        public void setName(String name) {
+            if (null == mNameView) return;
+            mNameView.setText(name);
         }
 
         public void setImage(Bitmap bmp){
@@ -92,6 +68,7 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
             if(null == bmp) return;
             mImageView.setImageBitmap(bmp);
         }
+
         private int getUsernameColor(String username) {
             int hash = 7;
             for (int i = 0, len = username.length(); i < len; i++) {
